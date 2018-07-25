@@ -6,4 +6,4 @@ python=C:\Users\mehdi\AppData\Local\Programs\Python\Python37-32\python.exe C:\Us
 OR
 python=python C:\Users\mehdi\OneDrive\Bureau\ioHelper.py
 
-PS : The absolute path of the file , is also needed.
+PS : The absolute path of the file src/main/resources/ioHelper.py, is also needed.
