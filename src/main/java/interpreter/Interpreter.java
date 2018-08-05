@@ -2,50 +2,54 @@ package interpreter;
 
 import java.io.*;
 import java.util.Properties;
+import java.util.concurrent.TimeUnit;
 
-public class Interpreter {
+class Interpreter {
+    private static final long PROCESS_TIMEOUT_SEC = 5;
     private String name;
-    private String path;
-    private Process process;
+    private String command;
+    private FilePath scriptFile;
 
 
-    private Interpreter(String name, String path) throws IOException {
+    private Interpreter(String name, String path) {
         this.name = name;
-        this.path = path;
-        process = buildProcess();
+        this.command = path;
+        scriptFile = FilePath.getUniqueFilePath();
     }
 
-    public String getName() {
+    String getName() {
         return name;
     }
 
-    public String getPath() {
-        return path;
-    }
 
 
-    public static Interpreter Load(String name) throws IOException, ScriptParseException {
+    static Interpreter Load(String name) throws IOException, ScriptParseException {
         return new Interpreter(name, loadPath(name));
     }
 
-    public Result execute(String code) {
+    Result execute(String code) {
+        Process process = null;
         try {
-            BufferedWriter p_stdin = new BufferedWriter(new OutputStreamWriter(process.getOutputStream()));
-            p_stdin.write(code + "\n");
-            p_stdin.flush();
-
-            BufferedReader p_stdout = new BufferedReader(new InputStreamReader(process.getInputStream()));
-            String line = p_stdout.readLine();
-
-            return new Result(line);
-        } catch (IOException e) {
-            e.printStackTrace();
+            scriptFile.createIfNotExists();
+            scriptFile.writeLine(code, true);
+            process = startInterpreterProcess();
+            BufferedReader stdout = new BufferedReader(new InputStreamReader(process.getInputStream()));
+            process.waitFor(PROCESS_TIMEOUT_SEC, TimeUnit.SECONDS);
+            String line, last = null;
+            while ((line = stdout.readLine()) != null) {
+                last = line;
+            }
+            return new Result(last == null ? "" : last);
+        } catch (IOException | InterruptedException e) {
+            return new Result(e.getMessage());
+        } finally {
+            if (process != null)
+                process.destroy();
         }
-        return new Result("");
     }
 
-    public void shutdown() {
-        process.destroy();
+    void clearScriptFile() {
+        scriptFile.writeLine("", false);
     }
 
     private static String loadPath(String name) throws IOException, ScriptParseException {
@@ -58,11 +62,10 @@ public class Interpreter {
         return prop.getProperty(name);
     }
 
-    private Process buildProcess() throws IOException {
+    private Process startInterpreterProcess() throws IOException {
         ProcessBuilder processBuilder = new ProcessBuilder();
-        processBuilder.command(getPath().split(" "));
+        processBuilder.command(command, scriptFile.getPath());
         processBuilder.directory(new File(System.getProperty("user.home")));
-        processBuilder.redirectErrorStream(true);
         return processBuilder.start();
     }
 }
